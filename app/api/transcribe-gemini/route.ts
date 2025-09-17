@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { transcribeAudioWithGemini } from '@/lib/gemini-transcription';
 
 export async function POST(request: NextRequest) {
+  let audioFile: File | null = null;
+  let fileName: string | null = null;
+  
   try {
     console.log('Gemini transcription API called');
     
@@ -13,8 +16,8 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    const audioFile = formData.get('audio') as File;
-    const fileName = formData.get('fileName') as string;
+    audioFile = formData.get('audio') as File;
+    fileName = formData.get('fileName') as string;
 
     if (!audioFile) {
       return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
@@ -43,13 +46,25 @@ export async function POST(request: NextRequest) {
       fileSize: audioFile.size
     });
   } catch (error) {
-    console.error('Gemini transcription error:', error);
+    console.error('Gemini transcription API error:', error);
+    console.error('API Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      fileName: fileName || (audioFile?.name ?? 'unknown'),
+      fileSize: audioFile?.size ?? 0,
+      fileType: audioFile?.type ?? 'unknown'
+    });
+    
+    // Return 200 with error message to continue processing other files
     return NextResponse.json(
       { 
         error: `Failed to transcribe audio with Gemini: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        transcription: `[Error con Gemini: ${error instanceof Error ? error.message : 'Error desconocido'}]`
+        transcription: `[Error con Gemini: ${error instanceof Error ? error.message : 'Error desconocido'}]`,
+        fileName: fileName || (audioFile?.name ?? 'unknown'),
+        provider: 'gemini',
+        successful: false
       }, 
-      { status: 500 }
+      { status: 200 } // Changed to 200 to continue processing
     );
   }
 }

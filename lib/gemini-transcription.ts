@@ -48,18 +48,14 @@ function isGeminiFormatSupported(filename: string): boolean {
 }
 
 async function fileToGenerativePart(file: File) {
-  const base64EncodedDataPromise = new Promise<string>((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64Data = (reader.result as string).split(',')[1];
-      resolve(base64Data);
-    };
-    reader.readAsDataURL(file);
-  });
+  // Convert File to ArrayBuffer, then to Buffer, then to base64
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const base64Data = buffer.toString('base64');
 
   return {
     inlineData: {
-      data: await base64EncodedDataPromise,
+      data: base64Data,
       mimeType: file.type || `audio/${getFileExtension(file.name)}`
     },
   };
@@ -165,16 +161,25 @@ Responde ÚNICAMENTE con la transcripción del audio, sin explicaciones adiciona
 
   } catch (error) {
     console.error('Gemini transcription error:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      fileName: audioFile.name,
+      fileSize: audioFile.size,
+      fileType: audioFile.type
+    });
     
     if (error instanceof Error) {
-      if (error.message.includes('API key')) {
-        return `[Error: Gemini API key no válida o no configurada]`;
-      } else if (error.message.includes('quota') || error.message.includes('limit')) {
-        return `[Error: Límite de cuota de Gemini alcanzado]`;
-      } else if (error.message.includes('file size') || error.message.includes('too large')) {
-        return `[Error: Archivo demasiado grande para Gemini (máx. ~20MB)]`;
-      } else if (error.message.includes('format') || error.message.includes('unsupported')) {
+      if (error.message.includes('API key') || error.message.includes('GEMINI_API_KEY')) {
+        return `[Error: Gemini API key no válida o no configurada. Verifica tu .env.local]`;
+      } else if (error.message.includes('quota') || error.message.includes('limit') || error.message.includes('429')) {
+        return `[Error: Límite de cuota de Gemini alcanzado. Intenta más tarde]`;
+      } else if (error.message.includes('file size') || error.message.includes('too large') || error.message.includes('413')) {
+        return `[Error: Archivo demasiado grande para Gemini (máx. ~20MB). Archivo: ${Math.round(audioFile.size / 1024 / 1024)}MB]`;
+      } else if (error.message.includes('format') || error.message.includes('unsupported') || error.message.includes('400')) {
         return `[Error: Formato no soportado por Gemini: ${getFileExtension(audioFile.name)}]`;
+      } else if (error.message.includes('FileReader')) {
+        return `[Error interno: Problema de conversión de archivo. Intenta de nuevo]`;
       }
     }
     
