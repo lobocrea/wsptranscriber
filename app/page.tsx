@@ -106,13 +106,12 @@ export default function Home() {
           const formData = new FormData();
           formData.append('audio', audioFile);
           formData.append('fileName', audioFile.name);
-          formData.append('provider', 'auto'); // Usar modo automático híbrido
 
           // Add timeout to prevent hanging (más tiempo para Gemini)
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
 
-          const response = await fetch('/api/transcribe-hybrid', {
+          const response = await fetch('/api/transcribe-gemini', {
             method: 'POST',
             body: formData,
             signal: controller.signal
@@ -208,296 +207,6 @@ export default function Home() {
     }
   };
 
-  const testParsingOnly = async () => {
-    if (!uploadedFiles.chatFile) {
-      alert('Por favor sube el archivo _chat.txt primero');
-      return;
-    }
-
-    console.log('=== PRUEBA SOLO PARSING ===');
-    setIsProcessing(true);
-    
-    try {
-      updateProcessingState({
-        step: 'parsing',
-        progress: 10,
-        currentAction: 'Probando solo el parsing...'
-      });
-
-      const chatText = await uploadedFiles.chatFile.text();
-      console.log('Chat text length:', chatText.length);
-      
-      const chatMessages = parseChatFile(chatText);
-      console.log('Parsed messages:', chatMessages.length);
-      
-      const mediaFilesNeeded = extractMediaFiles(chatMessages);
-      console.log('Media files needed:', mediaFilesNeeded);
-
-      // Simulate successful completion without APIs
-      updateProcessingState({
-        step: 'complete',
-        progress: 100,
-        currentAction: 'Parsing completado exitosamente'
-      });
-
-      // Create mock organized data
-      const mockOrganizedData = {
-        messages: chatMessages.map(msg => ({
-          timestamp: msg.timestamp,
-          sender: msg.sender,
-          content: msg.content,
-          type: msg.type,
-          originalFile: msg.mediaFile,
-          transcription: msg.type === 'audio' ? '[Transcripción simulada]' : undefined
-        })),
-        summary: `Parsing completado: ${chatMessages.length} mensajes procesados`
-      };
-
-      setProcessedMessages(mockOrganizedData.messages);
-
-    } catch (error) {
-      console.error('Error en prueba de parsing:', error);
-      updateProcessingState({
-        error: error instanceof Error ? error.message : 'Error desconocido'
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const testOpusFiles = async () => {
-    if (!uploadedFiles.chatFile) {
-      alert('Por favor sube el archivo _chat.txt primero');
-      return;
-    }
-
-    console.log('=== PRUEBA ESPECÍFICA PARA ARCHIVOS OPUS ===');
-    setIsProcessing(true);
-    
-    try {
-      // Step 1: Parse chat file
-      updateProcessingState({
-        step: 'parsing',
-        progress: 10,
-        currentAction: 'Buscando archivos OPUS...'
-      });
-
-      const chatText = await uploadedFiles.chatFile.text();
-      const chatMessages = parseChatFile(chatText);
-      
-      // Filtrar solo archivos OPUS
-      const opusFiles = uploadedFiles.mediaFiles.filter(file => 
-        file.name.toLowerCase().includes('.opus') ||
-        file.name.match(/\d{8}-AUDIO-.*\.opus$/i)
-      );
-
-      console.log(`Found ${opusFiles.length} OPUS files:`, opusFiles.map(f => f.name));
-
-      if (opusFiles.length === 0) {
-        alert('No se encontraron archivos .opus en los archivos subidos');
-        return;
-      }
-
-      updateProcessingState({
-        progress: 25,
-        currentAction: `Encontrados ${opusFiles.length} archivos OPUS para probar`
-      });
-
-      // Step 2: Test OPUS files specifically
-      updateProcessingState({
-        step: 'transcribing',
-        progress: 30,
-        currentAction: 'Probando transcripción de archivos OPUS...'
-      });
-
-      const transcriptions: Record<string, string> = {};
-
-      for (let i = 0; i < opusFiles.length; i++) {
-        const audioFile = opusFiles[i];
-        updateProcessingState({
-          progress: 30 + (i * 60) / opusFiles.length,
-          currentAction: `Probando OPUS ${i + 1}/${opusFiles.length}: ${audioFile.name}`
-        });
-
-        try {
-          console.log(`🔧 Testing OPUS file: ${audioFile.name}`);
-          
-          const formData = new FormData();
-          formData.append('audio', audioFile);
-          formData.append('fileName', audioFile.name);
-
-          const response = await fetch('/api/test-opus', {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
-
-          const result = await response.json();
-          transcriptions[audioFile.name] = result.transcription;
-          
-          console.log(`✅ OPUS test result for ${audioFile.name}:`, {
-            successful: result.successful,
-            provider: result.provider,
-            message: result.message,
-            transcription: result.transcription.substring(0, 100) + '...'
-          });
-        } catch (error) {
-          console.error(`❌ Error testing ${audioFile.name}:`, error);
-          transcriptions[audioFile.name] = `[Error en test OPUS: ${error instanceof Error ? error.message : 'Error desconocido'}]`;
-        }
-      }
-
-      // Step 3: Complete
-      updateProcessingState({
-        step: 'complete',
-        progress: 100,
-        currentAction: `Prueba OPUS completada: ${Object.keys(transcriptions).length} archivos procesados`
-      });
-
-      // Create organized data with OPUS test results
-      const organizedData = {
-        messages: chatMessages.map(msg => ({
-          timestamp: msg.timestamp,
-          sender: msg.sender,
-          content: msg.type === 'audio' && msg.mediaFile && transcriptions[msg.mediaFile] 
-            ? transcriptions[msg.mediaFile]
-            : msg.content,
-          type: (msg.type === 'audio' && msg.mediaFile && transcriptions[msg.mediaFile] 
-            ? 'audio_transcript' 
-            : msg.type) as 'text' | 'audio_transcript' | 'audio' | 'image' | 'video' | 'media',
-          originalFile: msg.mediaFile,
-          transcription: msg.type === 'audio' && msg.mediaFile 
-            ? (transcriptions[msg.mediaFile] || '[Audio sin transcribir]')
-            : undefined
-        })),
-        summary: `🔧 Prueba OPUS: ${Object.keys(transcriptions).length} archivos procesados`
-      };
-
-      setProcessedMessages(organizedData.messages);
-
-    } catch (error) {
-      console.error('Error en prueba OPUS:', error);
-      updateProcessingState({
-        error: error instanceof Error ? error.message : 'Error desconocido'
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const testWithMockTranscription = async () => {
-    if (!uploadedFiles.chatFile) {
-      alert('Por favor sube el archivo _chat.txt primero');
-      return;
-    }
-
-    console.log('=== PRUEBA CON TRANSCRIPCIÓN SIMULADA ===');
-    setIsProcessing(true);
-    
-    try {
-      // Step 1: Parse chat file
-      updateProcessingState({
-        step: 'parsing',
-        progress: 10,
-        currentAction: 'Parseando archivo de chat...'
-      });
-
-      const chatText = await uploadedFiles.chatFile.text();
-      const chatMessages = parseChatFile(chatText);
-      const mediaFilesNeeded = extractMediaFiles(chatMessages);
-
-      updateProcessingState({
-        progress: 25,
-        currentAction: `Encontrados ${chatMessages.length} mensajes y ${mediaFilesNeeded.length} archivos multimedia`
-      });
-
-      // Step 2: Mock transcribe audio files
-      updateProcessingState({
-        step: 'transcribing',
-        progress: 30,
-        currentAction: 'Iniciando transcripción simulada de audios...'
-      });
-
-      const transcriptions: Record<string, string> = {};
-      const audioFiles = uploadedFiles.mediaFiles.filter(file => 
-        file.type.startsWith('audio/') || 
-        file.name.includes('.opus') || 
-        file.name.includes('.ogg') ||
-        file.name.match(/\d{8}-AUDIO-.*\.opus$/i)
-      );
-
-      for (let i = 0; i < audioFiles.length; i++) {
-        const audioFile = audioFiles[i];
-        updateProcessingState({
-          progress: 30 + (i * 40) / audioFiles.length,
-          currentAction: `Transcribiendo audio ${i + 1}/${audioFiles.length}: ${audioFile.name}`
-        });
-
-        try {
-          const formData = new FormData();
-          formData.append('audio', audioFile);
-          formData.append('fileName', audioFile.name);
-          formData.append('provider', 'auto'); // Usar modo automático híbrido
-
-          const response = await Promise.race([
-            fetch('/api/transcribe-hybrid', {
-              method: 'POST',
-              body: formData,
-            }),
-            new Promise<never>((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout')), 90000) // Más tiempo para Gemini
-            )
-          ]);
-
-          const result = await response.json();
-          transcriptions[audioFile.name] = result.transcription;
-          console.log(`Mock transcription for ${audioFile.name}:`, result.transcription);
-        } catch (error) {
-          console.error(`Error transcribing ${audioFile.name}:`, error);
-          transcriptions[audioFile.name] = `[Error transcribiendo ${audioFile.name}]`;
-        }
-      }
-
-      // Step 3: Complete without AI organization
-      updateProcessingState({
-        step: 'complete',
-        progress: 100,
-        currentAction: 'Transcripción simulada completada'
-      });
-
-      // Create organized data with transcriptions
-      const organizedData = {
-        messages: chatMessages.map(msg => ({
-          timestamp: msg.timestamp,
-          sender: msg.sender,
-          content: msg.type === 'audio' && msg.mediaFile && transcriptions[msg.mediaFile] 
-            ? transcriptions[msg.mediaFile]
-            : msg.content,
-          type: (msg.type === 'audio' && msg.mediaFile && transcriptions[msg.mediaFile] 
-            ? 'audio_transcript' 
-            : msg.type) as 'text' | 'audio_transcript' | 'audio' | 'image' | 'video' | 'media',
-          originalFile: msg.mediaFile,
-          transcription: msg.type === 'audio' && msg.mediaFile 
-            ? (transcriptions[msg.mediaFile] || '[Audio sin transcribir]')
-            : undefined
-        })),
-        summary: `Conversación procesada con ${Object.keys(transcriptions).length} audios transcritos (simulado)`
-      };
-
-      setProcessedMessages(organizedData.messages);
-
-    } catch (error) {
-      console.error('Error en prueba con transcripción:', error);
-      updateProcessingState({
-        error: error instanceof Error ? error.message : 'Error desconocido'
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const canStartProcessing = uploadedFiles.chatFile && !isProcessing;
   const showResults = processingState.step === 'complete' && processedMessages.length > 0;
@@ -517,7 +226,7 @@ export default function Home() {
           </div>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             Convierte tus conversaciones de WhatsApp en texto transcrito completo usando 
-            OpenAI Whisper + Gemini AI con soporte para TODOS los formatos de audio
+            Gemini AI con soporte universal para todos los formatos de audio
           </p>
         </div>
 
@@ -528,7 +237,7 @@ export default function Home() {
               <Zap className="w-10 h-10 text-yellow-500 mx-auto mb-3" />
               <h3 className="font-semibold mb-2">Transcripción Automática</h3>
               <p className="text-sm text-gray-600">
-                Transcripción híbrida con OpenAI Whisper + Gemini AI para TODOS los formatos
+                Transcripción con Gemini AI para TODOS los formatos de audio
               </p>
             </CardContent>
           </Card>
@@ -574,44 +283,14 @@ export default function Home() {
               />
               
               {canStartProcessing && (
-                <div className="mt-6 space-y-3">
+                <div className="mt-6">
                   <Button 
                     onClick={processConversation}
                     size="lg"
                     className="w-full"
                   >
                     <MessageSquare className="w-5 h-5 mr-2" />
-                    Iniciar Transcripción y Análisis Completo
-                  </Button>
-                  
-                  <Button 
-                    onClick={testWithMockTranscription}
-                    size="lg"
-                    variant="secondary"
-                    className="w-full"
-                  >
-                    <Brain className="w-5 h-5 mr-2" />
-                    Probar con Transcripción Simulada
-                  </Button>
-                  
-                  <Button 
-                    onClick={testOpusFiles}
-                    size="lg"
-                    variant="destructive"
-                    className="w-full"
-                  >
-                    <Zap className="w-5 h-5 mr-2" />
-                    🔧 Test OPUS Files (Debug)
-                  </Button>
-                  
-                  <Button 
-                    onClick={testParsingOnly}
-                    size="lg"
-                    variant="outline"
-                    className="w-full"
-                  >
-                    <FileText className="w-5 h-5 mr-2" />
-                    Probar Solo Parsing (Sin IA)
+                    Iniciar Transcripción con Gemini AI
                   </Button>
                 </div>
               )}
