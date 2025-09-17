@@ -14,7 +14,7 @@ interface ConversationViewProps {
 export default function ConversationView({ messages }: ConversationViewProps) {
   const [selectedParticipant, setSelectedParticipant] = useState<string>('all');
   
-  const participants = [...new Set(messages.map(msg => msg.sender))];
+  const participants = Array.from(new Set(messages.map(msg => msg.sender)));
   const filteredMessages = selectedParticipant === 'all' 
     ? messages 
     : messages.filter(msg => msg.sender === selectedParticipant);
