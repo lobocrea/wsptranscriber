@@ -106,12 +106,13 @@ export default function Home() {
           const formData = new FormData();
           formData.append('audio', audioFile);
           formData.append('fileName', audioFile.name);
+          formData.append('provider', 'auto'); // Usar modo automático híbrido
 
-          // Add timeout to prevent hanging
+          // Add timeout to prevent hanging (más tiempo para Gemini)
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+          const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
 
-          const response = await fetch('/api/upload-audio', {
+          const response = await fetch('/api/transcribe-hybrid', {
             method: 'POST',
             body: formData,
             signal: controller.signal
@@ -316,15 +317,17 @@ export default function Home() {
           const formData = new FormData();
           formData.append('audio', audioFile);
           formData.append('fileName', audioFile.name);
+          formData.append('provider', 'auto'); // Usar modo automático híbrido
 
-          const response = await fetch('/api/test-transcription', {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (!response.ok) {
-            throw new Error(`Failed to transcribe ${audioFile.name}`);
-          }
+          const response = await Promise.race([
+            fetch('/api/transcribe-hybrid', {
+              method: 'POST',
+              body: formData,
+            }),
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout')), 90000) // Más tiempo para Gemini
+            )
+          ]);
 
           const result = await response.json();
           transcriptions[audioFile.name] = result.transcription;
@@ -391,7 +394,7 @@ export default function Home() {
           </div>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             Convierte tus conversaciones de WhatsApp en texto transcrito completo usando 
-            Amazon Transcribe y organización inteligente con Gemini AI
+            OpenAI Whisper + Gemini AI con soporte para TODOS los formatos de audio
           </p>
         </div>
 
@@ -402,7 +405,7 @@ export default function Home() {
               <Zap className="w-10 h-10 text-yellow-500 mx-auto mb-3" />
               <h3 className="font-semibold mb-2">Transcripción Automática</h3>
               <p className="text-sm text-gray-600">
-                Convierte todos los audios a texto usando Amazon Transcribe
+                Transcripción híbrida con OpenAI Whisper + Gemini AI para TODOS los formatos
               </p>
             </CardContent>
           </Card>
