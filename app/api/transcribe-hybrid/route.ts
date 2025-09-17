@@ -28,8 +28,10 @@ export async function POST(request: NextRequest) {
     // Determinar qué proveedor usar
     const hasOpenAI = !!process.env.OPENAI_API_KEY;
     const hasGemini = !!process.env.GEMINI_API_KEY;
+    const fileExtension = actualFileName.split('.').pop()?.toLowerCase() || '';
     
     console.log(`Available providers - OpenAI: ${hasOpenAI}, Gemini: ${hasGemini}`);
+    console.log(`File extension: ${fileExtension}`);
 
     // Estrategia de transcripción
     if (preferredProvider === 'openai' && hasOpenAI) {
@@ -46,8 +48,15 @@ export async function POST(request: NextRequest) {
       // Modo automático - probar ambos con fallback
       console.log('Auto mode - trying available providers');
       
-      // Prioridad: Gemini primero (soporta más formatos), luego OpenAI
-      if (hasGemini) {
+      // Para archivos .opus, priorizar Gemini (mejor soporte)
+      const shouldPreferGemini = fileExtension === 'opus' || 
+                                fileExtension === 'amr' || 
+                                fileExtension === '3gp' ||
+                                !hasOpenAI;
+      
+      if (shouldPreferGemini && hasGemini) {
+        console.log(`Preferring Gemini for ${fileExtension} format...`);
+      } else if (hasGemini) {
         try {
           console.log('Trying Gemini first...');
           transcription = await transcribeAudioWithGemini(audioFile);

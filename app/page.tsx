@@ -265,6 +265,129 @@ export default function Home() {
     }
   };
 
+  const testOpusFiles = async () => {
+    if (!uploadedFiles.chatFile) {
+      alert('Por favor sube el archivo _chat.txt primero');
+      return;
+    }
+
+    console.log('=== PRUEBA ESPECÍFICA PARA ARCHIVOS OPUS ===');
+    setIsProcessing(true);
+    
+    try {
+      // Step 1: Parse chat file
+      updateProcessingState({
+        step: 'parsing',
+        progress: 10,
+        currentAction: 'Buscando archivos OPUS...'
+      });
+
+      const chatText = await uploadedFiles.chatFile.text();
+      const chatMessages = parseChatFile(chatText);
+      
+      // Filtrar solo archivos OPUS
+      const opusFiles = uploadedFiles.mediaFiles.filter(file => 
+        file.name.toLowerCase().includes('.opus') ||
+        file.name.match(/\d{8}-AUDIO-.*\.opus$/i)
+      );
+
+      console.log(`Found ${opusFiles.length} OPUS files:`, opusFiles.map(f => f.name));
+
+      if (opusFiles.length === 0) {
+        alert('No se encontraron archivos .opus en los archivos subidos');
+        return;
+      }
+
+      updateProcessingState({
+        progress: 25,
+        currentAction: `Encontrados ${opusFiles.length} archivos OPUS para probar`
+      });
+
+      // Step 2: Test OPUS files specifically
+      updateProcessingState({
+        step: 'transcribing',
+        progress: 30,
+        currentAction: 'Probando transcripción de archivos OPUS...'
+      });
+
+      const transcriptions: Record<string, string> = {};
+
+      for (let i = 0; i < opusFiles.length; i++) {
+        const audioFile = opusFiles[i];
+        updateProcessingState({
+          progress: 30 + (i * 60) / opusFiles.length,
+          currentAction: `Probando OPUS ${i + 1}/${opusFiles.length}: ${audioFile.name}`
+        });
+
+        try {
+          console.log(`🔧 Testing OPUS file: ${audioFile.name}`);
+          
+          const formData = new FormData();
+          formData.append('audio', audioFile);
+          formData.append('fileName', audioFile.name);
+
+          const response = await fetch('/api/test-opus', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const result = await response.json();
+          transcriptions[audioFile.name] = result.transcription;
+          
+          console.log(`✅ OPUS test result for ${audioFile.name}:`, {
+            successful: result.successful,
+            provider: result.provider,
+            message: result.message,
+            transcription: result.transcription.substring(0, 100) + '...'
+          });
+        } catch (error) {
+          console.error(`❌ Error testing ${audioFile.name}:`, error);
+          transcriptions[audioFile.name] = `[Error en test OPUS: ${error instanceof Error ? error.message : 'Error desconocido'}]`;
+        }
+      }
+
+      // Step 3: Complete
+      updateProcessingState({
+        step: 'complete',
+        progress: 100,
+        currentAction: `Prueba OPUS completada: ${Object.keys(transcriptions).length} archivos procesados`
+      });
+
+      // Create organized data with OPUS test results
+      const organizedData = {
+        messages: chatMessages.map(msg => ({
+          timestamp: msg.timestamp,
+          sender: msg.sender,
+          content: msg.type === 'audio' && msg.mediaFile && transcriptions[msg.mediaFile] 
+            ? transcriptions[msg.mediaFile]
+            : msg.content,
+          type: (msg.type === 'audio' && msg.mediaFile && transcriptions[msg.mediaFile] 
+            ? 'audio_transcript' 
+            : msg.type) as 'text' | 'audio_transcript' | 'audio' | 'image' | 'video' | 'media',
+          originalFile: msg.mediaFile,
+          transcription: msg.type === 'audio' && msg.mediaFile 
+            ? (transcriptions[msg.mediaFile] || '[Audio sin transcribir]')
+            : undefined
+        })),
+        summary: `🔧 Prueba OPUS: ${Object.keys(transcriptions).length} archivos procesados`
+      };
+
+      setProcessedMessages(organizedData.messages);
+
+    } catch (error) {
+      console.error('Error en prueba OPUS:', error);
+      updateProcessingState({
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const testWithMockTranscription = async () => {
     if (!uploadedFiles.chatFile) {
       alert('Por favor sube el archivo _chat.txt primero');
@@ -469,6 +592,16 @@ export default function Home() {
                   >
                     <Brain className="w-5 h-5 mr-2" />
                     Probar con Transcripción Simulada
+                  </Button>
+                  
+                  <Button 
+                    onClick={testOpusFiles}
+                    size="lg"
+                    variant="destructive"
+                    className="w-full"
+                  >
+                    <Zap className="w-5 h-5 mr-2" />
+                    🔧 Test OPUS Files (Debug)
                   </Button>
                   
                   <Button 
