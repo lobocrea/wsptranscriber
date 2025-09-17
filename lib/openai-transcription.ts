@@ -23,7 +23,19 @@ function getFileExtension(filename: string): string {
 
 function isFormatSupported(filename: string): boolean {
   const extension = getFileExtension(filename);
-  return SUPPORTED_FORMATS.includes(extension);
+  const isSupported = SUPPORTED_FORMATS.includes(extension);
+  console.log(`Checking format support for: ${filename}`);
+  console.log(`Extension: ${extension}`);
+  console.log(`Supported formats: ${SUPPORTED_FORMATS.join(', ')}`);
+  console.log(`Is supported: ${isSupported}`);
+  
+  // Special handling for opus files - they should always be supported
+  if (extension === 'opus' || filename.includes('.opus')) {
+    console.log('Opus file detected - forcing support to true');
+    return true;
+  }
+  
+  return isSupported;
 }
 
 // Removed convertAudioToMp3 function - OpenAI Whisper supports .opus natively
@@ -36,6 +48,7 @@ export async function transcribeAudioWithOpenAI(audioFile: File): Promise<string
     }
 
     console.log(`Processing audio file: ${audioFile.name} (${getFileExtension(audioFile.name)} format, ${audioFile.size} bytes)`);
+    console.log(`File type: ${audioFile.type}`);
     
     const extension = getFileExtension(audioFile.name);
     
@@ -45,11 +58,18 @@ export async function transcribeAudioWithOpenAI(audioFile: File): Promise<string
       return `[Formato de audio no soportado: ${extension}. Formatos soportados: ${SUPPORTED_FORMATS.join(', ')}]`;
     }
 
-    console.log(`Sending to OpenAI Whisper: ${audioFile.name} (${extension} format)`);
+    // For opus files, ensure the correct MIME type
+    let fileToSend = audioFile;
+    if (extension === 'opus' && !audioFile.type.includes('opus')) {
+      console.log('Fixing MIME type for opus file');
+      fileToSend = new File([audioFile], audioFile.name, { type: 'audio/opus' });
+    }
+
+    console.log(`Sending to OpenAI Whisper: ${fileToSend.name} (${extension} format)`);
     
     // Send directly to OpenAI Whisper (supports .opus natively)
     const transcription = await openaiClient.audio.transcriptions.create({
-      file: audioFile,
+      file: fileToSend,
       model: 'whisper-1',
       language: 'es',
       response_format: 'text',
