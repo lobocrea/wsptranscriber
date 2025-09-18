@@ -4,8 +4,10 @@ import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, FileText, Image, Music, Video, X } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Upload, FileText, Image, Music, Video, X, Archive, Loader2 } from 'lucide-react';
 import { UploadedFiles } from '@/types/chat';
+import { extractWhatsAppZip, isValidZipFile, getZipInfo } from '@/lib/zip-handler';
 
 interface FileUploaderProps {
   onFilesUploaded: (files: UploadedFiles) => void;
@@ -13,9 +15,65 @@ interface FileUploaderProps {
 }
 
 export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUploaderProps) {
-  const [draggedFiles, setDraggedFiles] = useState<File[]>([]);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionStatus, setExtractionStatus] = useState<string>('');
+  const [zipInfo, setZipInfo] = useState<{
+    fileName: string;
+    totalFiles: number;
+    hasChatFile: boolean;
+    estimatedMediaFiles: number;
+  } | null>(null);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const handleZipExtraction = async (zipFile: File) => {
+    setIsExtracting(true);
+    setExtractionStatus('Analizando archivo ZIP...');
+    
+    try {
+      // Primero obtener información básica del ZIP
+      const info = await getZipInfo(zipFile);
+      setZipInfo({
+        fileName: zipFile.name,
+        totalFiles: info.totalFiles,
+        hasChatFile: info.hasChatFile,
+        estimatedMediaFiles: info.estimatedMediaFiles
+      });
+      
+      if (!info.hasChatFile) {
+        setExtractionStatus('❌ No se encontró archivo _chat.txt en el ZIP');
+        setIsExtracting(false);
+        return;
+      }
+      
+      setExtractionStatus(`Extrayendo ${info.totalFiles} archivos...`);
+      
+      // Extraer todos los archivos
+      const result = await extractWhatsAppZip(zipFile);
+      
+      if (result.success) {
+        setExtractionStatus(`✅ Extraídos: ${result.files.mediaFiles.length} archivos multimedia`);
+        onFilesUploaded(result.files);
+      } else {
+        setExtractionStatus(`❌ Error: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error extracting ZIP:', error);
+      setExtractionStatus(`❌ Error al procesar ZIP: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    // Buscar archivos ZIP primero
+    const zipFile = acceptedFiles.find(file => isValidZipFile(file));
+    
+    if (zipFile) {
+      console.log('ZIP file detected, extracting...');
+      await handleZipExtraction(zipFile);
+      return;
+    }
+    
+    // Fallback al método original para archivos individuales
     const chatFile = acceptedFiles.find(file => file.name.includes('_chat.txt'));
     const mediaFiles = acceptedFiles.filter(file => 
       !file.name.includes('_chat.txt') && 
@@ -38,6 +96,8 @@ export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUpl
     onDrop,
     multiple: true,
     accept: {
+      'application/zip': ['.zip'],
+      'application/x-zip-compressed': ['.zip'],
       'text/plain': ['.txt'],
       'image/*': ['.png', '.jpg', '.jpeg', '.gif'],
       'video/*': ['.mp4', '.mov', '.avi'],
@@ -67,7 +127,7 @@ export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUpl
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />
-            Subir Archivos de WhatsApp
+            Subir Archivo de WhatsApp
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -76,24 +136,66 @@ export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUpl
             className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
               isDragActive 
                 ? 'border-blue-500 bg-blue-50' 
+                : isExtracting
+                ? 'border-orange-300 bg-orange-50'
                 : 'border-gray-300 hover:border-gray-400'
             }`}
           >
-            <input {...getInputProps()} />
-            <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-            {isDragActive ? (
-              <p className="text-blue-600 font-medium">Suelta los archivos aquí...</p>
+            <input {...getInputProps()} disabled={isExtracting} />
+            
+            {isExtracting ? (
+              <div className="flex flex-col items-center">
+                <Loader2 className="w-12 h-12 mx-auto mb-4 text-orange-500 animate-spin" />
+                <p className="text-orange-600 font-medium mb-2">Procesando archivo ZIP...</p>
+                <p className="text-sm text-orange-500">{extractionStatus}</p>
+              </div>
+            ) : isDragActive ? (
+              <div className="flex flex-col items-center">
+                <Upload className="w-12 h-12 mx-auto mb-4 text-blue-500" />
+                <p className="text-blue-600 font-medium">Suelta el archivo aquí...</p>
+              </div>
             ) : (
-              <div>
+              <div className="flex flex-col items-center">
+                <div className="flex gap-4 mb-4">
+                  <Archive className="w-12 h-12 text-blue-500" />
+                  <Upload className="w-12 h-12 text-gray-400" />
+                </div>
                 <p className="text-gray-600 font-medium mb-2">
-                  Arrastra y suelta los archivos aquí, o haz clic para seleccionar
+                  Arrastra el archivo ZIP de WhatsApp aquí
                 </p>
-                <p className="text-sm text-gray-500">
-                  Incluye el archivo _chat.txt y todos los archivos multimedia (audios, fotos, videos)
+                <p className="text-sm text-gray-500 mb-3">
+                  O archivos individuales (_chat.txt + multimedia)
                 </p>
+                <div className="bg-blue-50 p-3 rounded-lg text-sm">
+                  <p className="text-blue-700 font-medium mb-1">💡 Recomendado: Archivo ZIP</p>
+                  <p className="text-blue-600">
+                    Exporta el chat desde WhatsApp con "Incluir archivos multimedia" 
+                    y sube directamente el archivo ZIP.
+                  </p>
+                </div>
               </div>
             )}
           </div>
+          
+          {zipInfo && (
+            <Alert className="mt-4">
+              <Archive className="h-4 w-4" />
+              <AlertDescription>
+                <strong>ZIP detectado:</strong> {zipInfo.fileName}<br/>
+                📁 {zipInfo.totalFiles} archivos totales | 
+                💬 {zipInfo.hasChatFile ? 'Chat encontrado' : 'Sin chat'} | 
+                🎵 {zipInfo.estimatedMediaFiles} archivos multimedia
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {extractionStatus && !isExtracting && (
+            <Alert className={extractionStatus.includes('❌') ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}>
+              <AlertDescription>
+                {extractionStatus}
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 

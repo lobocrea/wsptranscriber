@@ -4,11 +4,14 @@ Convierte tus conversaciones de WhatsApp en texto transcrito completo usando **G
 
 ## ✨ Características
 
+- 📦 **Importación Directa ZIP**: Sube directamente el archivo ZIP exportado de WhatsApp
+- 🔄 **Descompresión Automática**: Extrae y organiza automáticamente todos los archivos
 - 🎵 **Transcripción Universal**: Soporta TODOS los formatos de audio (opus, mp3, wav, m4a, aac, ogg, flac, amr, 3gp, etc.)
 - 🧠 **IA Avanzada**: Usa Gemini AI para transcripción y organización inteligente
 - 📱 **Optimizado para WhatsApp**: Maneja perfectamente archivos .opus y otros formatos de mensajería
 - 🆓 **Gratis**: Gemini AI ofrece límites generosos sin costo
 - 📄 **Parsing Inteligente**: Detecta automáticamente mensajes, audios, fotos, videos y documentos
+- ⚡ **Experiencia Fluida**: Un solo archivo ZIP → Transcripción completa
 
 ## 🚀 Cómo usar
 
@@ -31,15 +34,22 @@ GEMINI_API_KEY=tu_gemini_api_key_aqui
 1. Abre WhatsApp en tu teléfono
 2. Ve al chat que quieres transcribir
 3. Toca los 3 puntos → "Más" → "Exportar chat"
-4. Selecciona "Incluir archivos multimedia"
-5. Guarda el archivo ZIP
+4. Selecciona **"Incluir archivos multimedia"** ⚠️ Importante
+5. Comparte/guarda el archivo ZIP
 
 ### 3. Usar la aplicación
 
-1. Sube el archivo `_chat.txt` del ZIP
-2. Sube los archivos de audio (.opus, .m4a, etc.)
+**Método Recomendado (ZIP):**
+1. Arrastra directamente el archivo ZIP de WhatsApp a la aplicación
+2. La app automáticamente descomprime y organiza todos los archivos
 3. Haz clic en "Iniciar Transcripción con Gemini AI"
 4. ¡Espera a que se complete la transcripción!
+
+**Método Alternativo (Archivos individuales):**
+1. Descomprime manualmente el ZIP
+2. Sube el archivo `_chat.txt`
+3. Sube los archivos de audio (.opus, .m4a, etc.)
+4. Procede con la transcripción
 
 ## 🎯 Formatos Soportados
 
