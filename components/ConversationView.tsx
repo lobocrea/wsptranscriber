@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, Download, User, Calendar, Volume2, Image, Video, FileText, Mic } from 'lucide-react';
+import { MessageSquare, Download, User, Calendar, Volume2, Image, Video, FileText, Mic, FileDown } from 'lucide-react';
 import { ChatMessage } from '@/types/chat';
 
 interface ConversationViewProps {
@@ -19,19 +19,166 @@ export default function ConversationView({ messages }: ConversationViewProps) {
     ? messages 
     : messages.filter(msg => msg.sender === selectedParticipant);
 
-  const exportTranscription = () => {
-    const transcriptionText = filteredMessages.map(msg => {
-      const typeIcon = msg.type === 'audio_transcript' ? '[🎵 AUDIO TRANSCRITO] ' : 
-                      msg.type === 'image' ? '[🖼️ IMAGEN] ' :
-                      msg.type === 'video' ? '[🎥 VIDEO] ' : '';
-      return `[${msg.timestamp}] ${msg.sender}: ${typeIcon}${msg.content}`;
-    }).join('\n\n');
+  const exportAsMarkdown = () => {
+    const currentDate = new Date().toISOString().split('T')[0];
+    const participantFilter = selectedParticipant === 'all' ? 'Todos los participantes' : selectedParticipant;
     
-    const blob = new Blob([transcriptionText], { type: 'text/plain' });
+    let markdownContent = `# Conversación de WhatsApp Transcrita\n\n`;
+    markdownContent += `**Fecha de exportación:** ${currentDate}\n`;
+    markdownContent += `**Filtro aplicado:** ${participantFilter}\n`;
+    markdownContent += `**Total de mensajes:** ${filteredMessages.length}\n`;
+    markdownContent += `**Participantes:** ${participants.join(', ')}\n\n`;
+    markdownContent += `---\n\n`;
+
+    filteredMessages.forEach((msg, index) => {
+      const timestamp = formatTimestamp(msg.timestamp);
+      
+      markdownContent += `## Mensaje ${index + 1}\n\n`;
+      markdownContent += `**👤 Remitente:** ${msg.sender}\n`;
+      markdownContent += `**📅 Fecha:** ${timestamp}\n`;
+      
+      switch (msg.type) {
+        case 'audio_transcript':
+          markdownContent += `**🎵 Tipo:** Audio Transcrito\n`;
+          if (msg.originalFile) {
+            markdownContent += `**📁 Archivo original:** \`${msg.originalFile}\`\n`;
+          }
+          markdownContent += `\n**Transcripción:**\n> ${msg.content.replace(/\n/g, '\n> ')}\n\n`;
+          break;
+        case 'audio':
+          markdownContent += `**🎤 Tipo:** Audio (sin transcribir)\n`;
+          if (msg.originalFile) {
+            markdownContent += `**📁 Archivo:** \`${msg.originalFile}\`\n`;
+          }
+          markdownContent += `\n**Contenido:** ${msg.content}\n\n`;
+          break;
+        case 'image':
+          markdownContent += `**🖼️ Tipo:** Imagen\n`;
+          if (msg.originalFile) {
+            markdownContent += `**📁 Archivo:** \`${msg.originalFile}\`\n`;
+          }
+          if (msg.content && msg.content !== msg.originalFile) {
+            markdownContent += `\n**Descripción:** ${msg.content}\n\n`;
+          } else {
+            markdownContent += `\n`;
+          }
+          break;
+        case 'video':
+          markdownContent += `**🎥 Tipo:** Video\n`;
+          if (msg.originalFile) {
+            markdownContent += `**📁 Archivo:** \`${msg.originalFile}\`\n`;
+          }
+          if (msg.content && msg.content !== msg.originalFile) {
+            markdownContent += `\n**Descripción:** ${msg.content}\n\n`;
+          } else {
+            markdownContent += `\n`;
+          }
+          break;
+        case 'media':
+          markdownContent += `**📄 Tipo:** Archivo\n`;
+          if (msg.originalFile) {
+            markdownContent += `**📁 Archivo:** \`${msg.originalFile}\`\n`;
+          }
+          markdownContent += `\n**Contenido:** ${msg.content}\n\n`;
+          break;
+        default:
+          markdownContent += `**💬 Tipo:** Mensaje de texto\n`;
+          markdownContent += `\n**Contenido:** ${msg.content}\n\n`;
+          break;
+      }
+      
+      markdownContent += `---\n\n`;
+    });
+
+    const blob = new Blob([markdownContent], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `whatsapp-transcripcion-${new Date().toISOString().split('T')[0]}.txt`;
+    a.download = `whatsapp-transcripcion-${currentDate}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportAsText = () => {
+    const currentDate = new Date().toISOString().split('T')[0];
+    const participantFilter = selectedParticipant === 'all' ? 'Todos los participantes' : selectedParticipant;
+    
+    let textContent = `CONVERSACIÓN DE WHATSAPP TRANSCRITA\n`;
+    textContent += `${'='.repeat(50)}\n\n`;
+    textContent += `Fecha de exportación: ${currentDate}\n`;
+    textContent += `Filtro aplicado: ${participantFilter}\n`;
+    textContent += `Total de mensajes: ${filteredMessages.length}\n`;
+    textContent += `Participantes: ${participants.join(', ')}\n\n`;
+    textContent += `${'='.repeat(50)}\n\n`;
+
+    filteredMessages.forEach((msg, index) => {
+      const timestamp = formatTimestamp(msg.timestamp);
+      
+      textContent += `MENSAJE ${index + 1}\n`;
+      textContent += `${'-'.repeat(20)}\n`;
+      textContent += `Remitente: ${msg.sender}\n`;
+      textContent += `Fecha: ${timestamp}\n`;
+      
+      switch (msg.type) {
+        case 'audio_transcript':
+          textContent += `Tipo: [🎵 AUDIO TRANSCRITO]\n`;
+          if (msg.originalFile) {
+            textContent += `Archivo original: ${msg.originalFile}\n`;
+          }
+          textContent += `\nTranscripción:\n${msg.content}\n\n`;
+          break;
+        case 'audio':
+          textContent += `Tipo: [🎤 AUDIO SIN TRANSCRIBIR]\n`;
+          if (msg.originalFile) {
+            textContent += `Archivo: ${msg.originalFile}\n`;
+          }
+          textContent += `\nContenido: ${msg.content}\n\n`;
+          break;
+        case 'image':
+          textContent += `Tipo: [🖼️ IMAGEN]\n`;
+          if (msg.originalFile) {
+            textContent += `Archivo: ${msg.originalFile}\n`;
+          }
+          if (msg.content && msg.content !== msg.originalFile) {
+            textContent += `\nDescripción: ${msg.content}\n\n`;
+          } else {
+            textContent += `\n`;
+          }
+          break;
+        case 'video':
+          textContent += `Tipo: [🎥 VIDEO]\n`;
+          if (msg.originalFile) {
+            textContent += `Archivo: ${msg.originalFile}\n`;
+          }
+          if (msg.content && msg.content !== msg.originalFile) {
+            textContent += `\nDescripción: ${msg.content}\n\n`;
+          } else {
+            textContent += `\n`;
+          }
+          break;
+        case 'media':
+          textContent += `Tipo: [📄 ARCHIVO]\n`;
+          if (msg.originalFile) {
+            textContent += `Archivo: ${msg.originalFile}\n`;
+          }
+          textContent += `\nContenido: ${msg.content}\n\n`;
+          break;
+        default:
+          textContent += `Tipo: [💬 MENSAJE DE TEXTO]\n`;
+          textContent += `\nContenido: ${msg.content}\n\n`;
+          break;
+      }
+      
+      textContent += `${'-'.repeat(50)}\n\n`;
+    });
+
+    const blob = new Blob([textContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `whatsapp-transcripcion-${currentDate}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -94,10 +241,16 @@ export default function ConversationView({ messages }: ConversationViewProps) {
               <MessageSquare className="w-5 h-5" />
               Conversación Transcrita
             </CardTitle>
-            <Button onClick={exportTranscription} variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Exportar Transcripción
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={exportAsMarkdown} variant="outline" size="sm">
+                <FileDown className="w-4 h-4 mr-2" />
+                Exportar .MD
+              </Button>
+              <Button onClick={exportAsText} variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                Exportar .TXT
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
