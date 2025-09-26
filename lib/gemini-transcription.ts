@@ -52,11 +52,45 @@ async function fileToGenerativePart(file: File) {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   const base64Data = buffer.toString('base64');
+  
+  const extension = getFileExtension(file.name);
+  let mimeType = file.type;
+  
+  // Asegurar MIME type correcto si no está definido
+  if (!mimeType || mimeType === 'application/octet-stream') {
+    switch (extension) {
+      case 'opus':
+        mimeType = 'audio/ogg; codecs=opus';
+        break;
+      case 'ogg':
+        mimeType = 'audio/ogg';
+        break;
+      case 'mp3':
+        mimeType = 'audio/mpeg';
+        break;
+      case 'wav':
+        mimeType = 'audio/wav';
+        break;
+      case 'm4a':
+        mimeType = 'audio/mp4';
+        break;
+      case 'aac':
+        mimeType = 'audio/aac';
+        break;
+      case 'amr':
+        mimeType = 'audio/amr';
+        break;
+      default:
+        mimeType = `audio/${extension}`;
+    }
+  }
+  
+  console.log(`🔧 [GEMINI] Preparing file part - MIME: ${mimeType}, Size: ${base64Data.length} chars`);
 
   return {
     inlineData: {
       data: base64Data,
-      mimeType: file.type || `audio/${getFileExtension(file.name)}`
+      mimeType: mimeType
     },
   };
 }
@@ -95,6 +129,85 @@ async function retryWithBackoff<T>(
   throw lastError!;
 }
 
+// Función para convertir OPUS a WAV usando Web Audio API
+async function convertOpusToWav(opusFile: File): Promise<File> {
+  console.log(`🔄 [GEMINI] Converting OPUS to WAV: ${opusFile.name}`);
+  
+  try {
+    // Crear AudioContext
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // Leer el archivo OPUS
+    const arrayBuffer = await opusFile.arrayBuffer();
+    
+    // Decodificar el audio
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    
+    // Convertir a WAV
+    const wavBuffer = audioBufferToWav(audioBuffer);
+    
+    // Crear nuevo archivo WAV
+    const wavFile = new File([wavBuffer], opusFile.name.replace('.opus', '.wav'), {
+      type: 'audio/wav'
+    });
+    
+    console.log(`✅ [GEMINI] OPUS converted to WAV: ${wavFile.size} bytes`);
+    return wavFile;
+    
+  } catch (error) {
+    console.error(`❌ [GEMINI] Failed to convert OPUS to WAV:`, error);
+    throw new Error(`No se pudo convertir OPUS a WAV: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+  }
+}
+
+// Función auxiliar para convertir AudioBuffer a WAV
+function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
+  const length = buffer.length;
+  const numberOfChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const bytesPerSample = 2;
+  const blockAlign = numberOfChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = length * blockAlign;
+  const bufferSize = 44 + dataSize;
+  
+  const arrayBuffer = new ArrayBuffer(bufferSize);
+  const view = new DataView(arrayBuffer);
+  
+  // WAV header
+  const writeString = (offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+  
+  writeString(0, 'RIFF');
+  view.setUint32(4, bufferSize - 8, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numberOfChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bytesPerSample * 8, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+  
+  // Convert audio data
+  let offset = 44;
+  for (let i = 0; i < length; i++) {
+    for (let channel = 0; channel < numberOfChannels; channel++) {
+      const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+      view.setInt16(offset, sample * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+  
+  return arrayBuffer;
+}
+
 export async function transcribeAudioWithGemini(audioFile: File): Promise<string> {
   try {
     if (!process.env.GEMINI_API_KEY) {
@@ -114,15 +227,47 @@ export async function transcribeAudioWithGemini(audioFile: File): Promise<string
     // Preparar el archivo para Gemini
     let fileToSend = audioFile;
     
-    // Asegurar MIME type correcto para formatos específicos
-    if (extension === 'opus' && !audioFile.type.includes('opus')) {
-      fileToSend = new File([audioFile], audioFile.name, { type: 'audio/opus' });
-    } else if (extension === 'ogg' && !audioFile.type.includes('ogg')) {
-      fileToSend = new File([audioFile], audioFile.name, { type: 'audio/ogg' });
+    // Convertir OPUS a WAV si es necesario
+    if (extension === 'opus') {
+      console.log(`🔄 [GEMINI] OPUS file detected, attempting conversion to WAV...`);
+      try {
+        fileToSend = await convertOpusToWav(audioFile);
+        console.log(`✅ [GEMINI] Successfully converted OPUS to WAV`);
+      } catch (conversionError) {
+        console.error(`❌ [GEMINI] OPUS conversion failed:`, conversionError);
+        // Fallback: intentar con OPUS original usando MIME type correcto
+        console.log(`🔄 [GEMINI] Fallback: trying original OPUS with proper MIME type`);
+        const mimeType = 'audio/ogg; codecs=opus';
+        fileToSend = new File([audioFile], audioFile.name, { type: mimeType });
+      }
+    }
+    
+    // Asegurar MIME type correcto para otros formatos específicos
+    let mimeType = fileToSend.type;
+    
+    if (extension === 'ogg' && !fileToSend.type.includes('ogg')) {
+      mimeType = 'audio/ogg';
+      fileToSend = new File([audioFile], audioFile.name, { type: mimeType });
     } else if (extension === 'm4a' && !audioFile.type.includes('m4a')) {
-      fileToSend = new File([audioFile], audioFile.name, { type: 'audio/m4a' });
+      mimeType = 'audio/mp4';
+      fileToSend = new File([audioFile], audioFile.name, { type: mimeType });
     } else if (extension === 'amr' && !audioFile.type.includes('amr')) {
-      fileToSend = new File([audioFile], audioFile.name, { type: 'audio/amr' });
+      mimeType = 'audio/amr';
+      fileToSend = new File([audioFile], audioFile.name, { type: mimeType });
+    }
+    
+    console.log(`🎵 [GEMINI] Final MIME type: ${fileToSend.type}`);
+    console.log(`🎵 [GEMINI] File extension: ${extension}`);
+    console.log(`🎵 [GEMINI] Original type: ${audioFile.type}`);
+    console.log(`🎵 [GEMINI] File size: ${audioFile.size} bytes`);
+    
+    // Verificar si el archivo está vacío o corrupto
+    if (audioFile.size === 0) {
+      throw new Error('El archivo de audio está vacío');
+    }
+    
+    if (audioFile.size < 100) {
+      console.warn(`⚠️ [GEMINI] Archivo muy pequeño (${audioFile.size} bytes), puede estar corrupto`);
     }
 
     console.log(`Sending to Gemini AI: ${fileToSend.name} (${extension} format)`);
@@ -177,7 +322,11 @@ Responde ÚNICAMENTE con la transcripción del audio, sin explicaciones adiciona
       } else if (error.message.includes('file size') || error.message.includes('too large') || error.message.includes('413')) {
         return `[Error: Archivo demasiado grande para Gemini (máx. ~20MB). Archivo: ${Math.round(audioFile.size / 1024 / 1024)}MB]`;
       } else if (error.message.includes('format') || error.message.includes('unsupported') || error.message.includes('400')) {
-        return `[Error: Formato no soportado por Gemini: ${getFileExtension(audioFile.name)}]`;
+        const ext = getFileExtension(audioFile.name);
+        if (ext === 'opus') {
+          return `[Error: Formato OPUS no soportado directamente por Gemini. Intenta convertir a MP3 o WAV primero]`;
+        }
+        return `[Error: Formato no soportado por Gemini: ${ext}. Formatos soportados: MP3, WAV, M4A, AAC]`;
       } else if (error.message.includes('FileReader')) {
         return `[Error interno: Problema de conversión de archivo. Intenta de nuevo]`;
       }
