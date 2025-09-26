@@ -15,7 +15,7 @@ export interface ZipExtractionResult {
 
 /**
  * Extrae archivos de un ZIP de WhatsApp
- * Busca el archivo _chat.txt y todos los archivos multimedia
+ * Busca archivos de texto que contengan conversaciones de WhatsApp y todos los archivos multimedia
  */
 export async function extractWhatsAppZip(zipFile: File): Promise<ZipExtractionResult> {
   try {
@@ -45,8 +45,8 @@ export async function extractWhatsAppZip(zipFile: File): Promise<ZipExtractionRe
       
       console.log(`Processing file: ${fileName}`);
       
-      // Buscar el archivo de chat (termina con _chat.txt)
-      if (fileName.endsWith('_chat.txt')) {
+      // Buscar archivos de chat de WhatsApp
+      if (await isWhatsAppChatFile(fileName, zipEntry)) {
         console.log(`Found chat file: ${fileName}`);
         const content = await zipEntry.async('blob');
         chatFile = new File([content], fileName, { type: 'text/plain' });
@@ -73,7 +73,7 @@ export async function extractWhatsAppZip(zipFile: File): Promise<ZipExtractionRe
       return {
         success: false,
         files: { chatFile: null, mediaFiles: [] },
-        error: 'No se encontró el archivo _chat.txt en el ZIP. Asegúrate de exportar el chat completo desde WhatsApp.',
+        error: 'No se encontró un archivo de conversación de WhatsApp en el ZIP. Asegúrate de exportar el chat completo desde WhatsApp.',
         totalFiles,
         chatFileName: undefined
       };
@@ -94,6 +94,66 @@ export async function extractWhatsAppZip(zipFile: File): Promise<ZipExtractionRe
       error: `Error al descomprimir el archivo: ${error instanceof Error ? error.message : 'Error desconocido'}`,
       totalFiles: 0
     };
+  }
+}
+
+/**
+ * Determina si un archivo es un chat de WhatsApp basándose en su nombre y contenido
+ */
+async function isWhatsAppChatFile(fileName: string, zipEntry: JSZip.JSZipObject): Promise<boolean> {
+  // Verificar que sea un archivo de texto
+  if (!fileName.toLowerCase().endsWith('.txt')) {
+    return false;
+  }
+  
+  // Patrones comunes de nombres de archivos de chat de WhatsApp
+  const chatFilePatterns = [
+    /_chat\.txt$/i,           // Formato tradicional: _chat.txt
+    /chat\.txt$/i,            // Formato simple: chat.txt
+    /conversacion\.txt$/i,    // Formato en español: conversacion.txt
+    /conversation\.txt$/i,    // Formato en inglés: conversation.txt
+    /whatsapp.*\.txt$/i,      // Cualquier archivo que contenga "whatsapp"
+  ];
+  
+  // Verificar si el nombre del archivo coincide con algún patrón
+  const matchesPattern = chatFilePatterns.some(pattern => pattern.test(fileName));
+  
+  if (matchesPattern) {
+    console.log(`File ${fileName} matches WhatsApp chat pattern`);
+    return true;
+  }
+  
+  // Si no coincide con los patrones, verificar el contenido
+  // Solo para archivos .txt que podrían ser chats
+  try {
+    // Leer una muestra del contenido (primeros 1000 caracteres)
+    const content = await zipEntry.async('text');
+    const sample = content.substring(0, 1000);
+    
+    // Patrones que indican que es un chat de WhatsApp
+    const whatsappPatterns = [
+      /\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}\s*[AP]?M?\s*-\s*.+:/,  // Formato de fecha/hora de WhatsApp
+      /\[\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}:\d{2}\s*[AP]?M?\]/,   // Formato con corchetes
+      /\d{1,2}-\d{1,2}-\d{2,4}\s+\d{1,2}:\d{2}\s*-\s*.+:/,                 // Formato con guiones
+      /<Media omitted>/i,                                                    // Texto típico de WhatsApp
+      /<Multimedia omitido>/i,                                               // Texto en español
+      /Messages and calls are end-to-end encrypted/i,                        // Mensaje de encriptación
+      /Los mensajes y las llamadas están cifrados de extremo a extremo/i     // Mensaje en español
+    ];
+    
+    const isWhatsAppContent = whatsappPatterns.some(pattern => pattern.test(sample));
+    
+    if (isWhatsAppContent) {
+      console.log(`File ${fileName} contains WhatsApp chat content patterns`);
+      return true;
+    }
+    
+    console.log(`File ${fileName} is a text file but doesn't contain WhatsApp patterns`);
+    return false;
+    
+  } catch (error) {
+    console.error(`Error reading content of ${fileName}:`, error);
+    return false;
   }
 }
 
@@ -204,7 +264,7 @@ export async function getZipInfo(zipFile: File): Promise<{
       totalFiles++;
       const fileName = relativePath.split('/').pop() || relativePath;
       
-      if (fileName.endsWith('_chat.txt')) {
+      if (await isWhatsAppChatFile(fileName, zipEntry)) {
         hasChatFile = true;
       } else if (isMediaFile(fileName)) {
         estimatedMediaFiles++;
