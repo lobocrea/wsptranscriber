@@ -180,18 +180,45 @@ export default function Home() {
       }
 
       const organizedData = await organizeResponse.json();
-      console.log('Datos organizados recibidos:', {
+      console.log('🔍 [DEBUG] Datos organizados recibidos:', {
         messagesCount: organizedData.messages?.length || 0,
-        summary: organizedData.summary
+        summary: organizedData.summary,
+        fallback: organizedData.fallback,
+        error: organizedData.error,
+        fullResponse: organizedData
       });
       
-      updateProcessingState({
-        step: 'complete',
-        progress: 100,
-        currentAction: 'Conversación procesada exitosamente'
-      });
+      // Verificar si hay mensajes válidos
+      const messages = organizedData.messages || [];
+      console.log('🔍 [DEBUG] Mensajes a procesar:', messages.length);
+      
+      if (messages.length === 0) {
+        console.warn('⚠️ [WARNING] No se recibieron mensajes organizados');
+        console.log('📊 [DEBUG] Respuesta completa:', JSON.stringify(organizedData, null, 2));
+        
+        // Mostrar información del fallback si existe
+        if (organizedData.fallback) {
+          updateProcessingState({
+            step: 'complete',
+            progress: 100,
+            currentAction: `Procesado con fallback: ${organizedData.summary || 'Sin resumen'}`
+          });
+        } else {
+          updateProcessingState({
+            step: 'complete',
+            progress: 100,
+            currentAction: 'Procesado pero sin mensajes para mostrar'
+          });
+        }
+      } else {
+        updateProcessingState({
+          step: 'complete',
+          progress: 100,
+          currentAction: `Conversación procesada exitosamente - ${messages.length} mensajes`
+        });
+      }
 
-      setProcessedMessages(organizedData.messages || []);
+      setProcessedMessages(messages);
 
     } catch (error) {
       console.error('=== ERROR EN PROCESAMIENTO ===');
@@ -209,7 +236,7 @@ export default function Home() {
 
 
   const canStartProcessing = uploadedFiles.chatFile && !isProcessing;
-  const showResults = processingState.step === 'complete' && processedMessages.length > 0;
+  const showResults = processingState.step === 'complete';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -327,7 +354,41 @@ export default function Home() {
                 Nuevo Análisis
               </Button>
             </div>
-            <ConversationView messages={processedMessages} />
+            
+            {/* Información de estado del procesamiento */}
+            {processingState.currentAction && (
+              <Alert className="mb-6">
+                <AlertDescription>
+                  <strong>Estado:</strong> {processingState.currentAction}
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {/* Mostrar mensajes o información de debug */}
+            {processedMessages.length > 0 ? (
+              <ConversationView messages={processedMessages} />
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <MessageSquare className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                  <h3 className="text-xl font-semibold mb-2">Procesamiento Completado</h3>
+                  <p className="text-gray-600 mb-4">
+                    El procesamiento se completó pero no se encontraron mensajes para mostrar.
+                  </p>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left">
+                    <h4 className="font-medium text-yellow-800 mb-2">Información de Debug:</h4>
+                    <ul className="text-sm text-yellow-700 space-y-1">
+                      <li>• Estado: {processingState.currentAction}</li>
+                      <li>• Progreso: {processingState.progress}%</li>
+                      <li>• Mensajes procesados: {processedMessages.length}</li>
+                    </ul>
+                    <p className="text-xs text-yellow-600 mt-3">
+                      Revisa la consola del navegador (F12) para más detalles técnicos.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
       </div>
