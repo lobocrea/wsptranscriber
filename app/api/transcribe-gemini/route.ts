@@ -36,13 +36,36 @@ export async function POST(request: NextRequest) {
       }, { status: 200 });
     }
 
-    // Transcribe with Gemini AI
-    const transcription = await transcribeAudioWithGemini(audioFile);
+    // Check if it's an OPUS file and try OpenAI first as it handles OPUS better
+    const isOpusFile = audioFile.name.toLowerCase().endsWith('.opus');
+    
+    let transcription: string;
+    let provider: string;
+    
+    if (isOpusFile) {
+      console.log(`🎵 [TRANSCRIBE] OPUS file detected, trying OpenAI Whisper first...`);
+      try {
+        // Try OpenAI Whisper for OPUS files (better OPUS support)
+        const { transcribeAudioWithOpenAI } = await import('@/lib/openai-transcription');
+        transcription = await transcribeAudioWithOpenAI(audioFile);
+        provider = 'openai-whisper';
+        console.log(`✅ [TRANSCRIBE] OpenAI Whisper succeeded for OPUS file`);
+      } catch (openaiError) {
+        console.log(`❌ [TRANSCRIBE] OpenAI failed for OPUS, trying Gemini...`);
+        // Fallback to Gemini
+        transcription = await transcribeAudioWithGemini(audioFile);
+        provider = 'gemini-fallback';
+      }
+    } else {
+      // For non-OPUS files, use Gemini directly
+      transcription = await transcribeAudioWithGemini(audioFile);
+      provider = 'gemini';
+    }
     
     return NextResponse.json({ 
       transcription,
       fileName: fileName || audioFile.name,
-      provider: 'gemini',
+      provider: provider,
       fileSize: audioFile.size
     });
   } catch (error) {

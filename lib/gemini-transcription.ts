@@ -235,10 +235,8 @@ export async function transcribeAudioWithGemini(audioFile: File): Promise<string
         console.log(`✅ [GEMINI] Successfully converted OPUS to WAV`);
       } catch (conversionError) {
         console.error(`❌ [GEMINI] OPUS conversion failed:`, conversionError);
-        // Fallback: intentar con OPUS original usando MIME type correcto
-        console.log(`🔄 [GEMINI] Fallback: trying original OPUS with proper MIME type`);
-        const mimeType = 'audio/ogg; codecs=opus';
-        fileToSend = new File([audioFile], audioFile.name, { type: mimeType });
+        // Para archivos OPUS, es mejor fallar aquí y que el sistema use OpenAI
+        throw new Error(`Formato OPUS no soportado directamente por Gemini. Intenta convertir a MP3 o WAV primero`);
       }
     }
     
