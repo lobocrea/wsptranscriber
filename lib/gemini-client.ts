@@ -101,7 +101,7 @@ export async function organizeConversation(chatData: any[], transcriptions: Reco
     console.log(`📊 [GEMINI-CLIENT] Organizing ${chatData.length} messages with ${Object.keys(safeTranscriptions).length} transcriptions`);
 
     currentStep = 'initializing_gemini_model';
-    let geminiModel;
+    let geminiModel: any;
     try {
       console.log('🤖 [GEMINI-CLIENT] Initializing Gemini model...');
       geminiModel = getGeminiModel();
