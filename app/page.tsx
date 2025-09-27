@@ -5,15 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import { MessageSquare, Zap, Brain, FileText } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { MessageSquare, Zap, Brain, FileText, Archive, Users, ToggleLeft, ToggleRight } from 'lucide-react';
 import FileUploader from '@/components/FileUploader';
 import ProcessingSteps from '@/components/ProcessingSteps';
 import ConversationView from '@/components/ConversationView';
 import DebugPanel from '@/components/DebugPanel';
+import MultipleConversationsManager from '@/components/MultipleConversationsManager';
 import { parseChatFile, extractMediaFiles } from '@/lib/chat-parser';
-import { UploadedFiles, ProcessingState, ChatMessage } from '@/types/chat';
+import { UploadedFiles, ProcessingState, ChatMessage, Conversation, MultipleConversationsState } from '@/types/chat';
 
 export default function Home() {
+  // Estado para modo single (original)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFiles>({
     chatFile: null,
     mediaFiles: []
@@ -27,9 +30,55 @@ export default function Home() {
   const [processedMessages, setProcessedMessages] = useState<ChatMessage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Estado para modo múltiple
+  const [multipleMode, setMultipleMode] = useState(false);
+  const [multipleConversationsState, setMultipleConversationsState] = useState<MultipleConversationsState>({
+    conversations: [],
+    activeConversationId: null
+  });
+
   const updateProcessingState = useCallback((updates: Partial<ProcessingState>) => {
     setProcessingState(prev => ({ ...prev, ...updates }));
   }, []);
+
+  // Funciones para múltiples conversaciones
+  const handleConversationAdded = useCallback((conversation: Conversation) => {
+    setMultipleConversationsState(prev => ({
+      ...prev,
+      conversations: [...prev.conversations, conversation]
+    }));
+  }, []);
+
+  const handleUpdateConversation = useCallback((conversationId: string, updates: Partial<Conversation>) => {
+    setMultipleConversationsState(prev => ({
+      ...prev,
+      conversations: prev.conversations.map(conv => 
+        conv.id === conversationId ? { ...conv, ...updates } : conv
+      )
+    }));
+  }, []);
+
+  const handleRemoveConversation = useCallback((conversationId: string) => {
+    setMultipleConversationsState(prev => ({
+      ...prev,
+      conversations: prev.conversations.filter(conv => conv.id !== conversationId),
+      activeConversationId: prev.activeConversationId === conversationId ? null : prev.activeConversationId
+    }));
+  }, []);
+
+  const toggleMode = () => {
+    setMultipleMode(!multipleMode);
+    // Reset states when switching modes
+    if (!multipleMode) {
+      // Switching to multiple mode
+      setUploadedFiles({ chatFile: null, mediaFiles: [] });
+      setProcessedMessages([]);
+      setProcessingState({ step: 'upload', progress: 0 });
+    } else {
+      // Switching to single mode
+      setMultipleConversationsState({ conversations: [], activeConversationId: null });
+    }
+  };
 
   const processConversation = async () => {
     if (!uploadedFiles.chatFile) {
@@ -235,8 +284,9 @@ export default function Home() {
   };
 
 
-  const canStartProcessing = uploadedFiles.chatFile && !isProcessing;
-  const showResults = processingState.step === 'complete';
+  const canStartProcessing = !multipleMode && uploadedFiles.chatFile && !isProcessing;
+  const showResults = !multipleMode && processingState.step === 'complete';
+  const showMultipleManager = multipleMode;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -251,10 +301,49 @@ export default function Home() {
               WhatsApp Transcriber AI
             </h1>
           </div>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-6">
             Convierte tus conversaciones de WhatsApp en texto transcrito completo usando 
             Gemini AI con soporte universal para todos los formatos de audio
           </p>
+          
+          {/* Mode Toggle */}
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg border shadow-sm">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-gray-600" />
+                <span className={`text-sm font-medium ${!multipleMode ? 'text-blue-600' : 'text-gray-500'}`}>
+                  Una Conversación
+                </span>
+              </div>
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleMode}
+                className="p-1 h-8 w-12"
+              >
+                {multipleMode ? (
+                  <ToggleRight className="w-6 h-6 text-blue-600" />
+                ) : (
+                  <ToggleLeft className="w-6 h-6 text-gray-400" />
+                )}
+              </Button>
+              
+              <div className="flex items-center gap-2">
+                <Archive className="w-4 h-4 text-gray-600" />
+                <span className={`text-sm font-medium ${multipleMode ? 'text-blue-600' : 'text-gray-500'}`}>
+                  Múltiples Conversaciones
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          {multipleMode && (
+            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+              <Users className="w-3 h-3 mr-1" />
+              Modo Múltiple Activo
+            </Badge>
+          )}
         </div>
 
         {/* Features */}
@@ -292,7 +381,25 @@ export default function Home() {
 
         <Separator className="my-8" />
 
-        {!showResults ? (
+        {showMultipleManager ? (
+          /* Multiple Conversations Mode */
+          <div className="space-y-8">
+            <div>
+              <h2 className="text-2xl font-bold mb-4">Cargar Múltiples Conversaciones</h2>
+              <FileUploader 
+                multipleMode={true}
+                onConversationAdded={handleConversationAdded}
+              />
+            </div>
+            
+            <MultipleConversationsManager
+              conversations={multipleConversationsState.conversations}
+              onUpdateConversation={handleUpdateConversation}
+              onRemoveConversation={handleRemoveConversation}
+            />
+          </div>
+        ) : !showResults ? (
+          /* Single Conversation Mode - Upload */
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* File Upload Section */}
             <div>
@@ -300,6 +407,7 @@ export default function Home() {
               <FileUploader 
                 onFilesUploaded={setUploadedFiles}
                 uploadedFiles={uploadedFiles}
+                multipleMode={false}
               />
 
               <DebugPanel 

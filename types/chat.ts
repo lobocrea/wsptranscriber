@@ -18,3 +18,19 @@ export interface UploadedFiles {
   chatFile: File | null;
   mediaFiles: File[];
 }
+
+// Nuevos tipos para múltiples conversaciones
+export interface Conversation {
+  id: string;
+  name: string;
+  uploadedFiles: UploadedFiles;
+  processingState: ProcessingState;
+  processedMessages: ChatMessage[];
+  isProcessing: boolean;
+  createdAt: Date;
+}
+
+export interface MultipleConversationsState {
+  conversations: Conversation[];
+  activeConversationId: string | null;
+}

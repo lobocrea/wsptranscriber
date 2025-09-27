@@ -6,15 +6,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Upload, FileText, Image, Music, Video, X, Archive, Loader2 } from 'lucide-react';
-import { UploadedFiles } from '@/types/chat';
+import { UploadedFiles, Conversation } from '@/types/chat';
 import { extractWhatsAppZip, isValidZipFile, getZipInfo } from '@/lib/zip-handler';
 
 interface FileUploaderProps {
-  onFilesUploaded: (files: UploadedFiles) => void;
-  uploadedFiles: UploadedFiles;
+  onFilesUploaded?: (files: UploadedFiles) => void;
+  uploadedFiles?: UploadedFiles;
+  onConversationAdded?: (conversation: Conversation) => void;
+  multipleMode?: boolean;
 }
 
-export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUploaderProps) {
+export default function FileUploader({ 
+  onFilesUploaded, 
+  uploadedFiles = { chatFile: null, mediaFiles: [] }, 
+  onConversationAdded,
+  multipleMode = false 
+}: FileUploaderProps) {
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionStatus, setExtractionStatus] = useState<string>('');
   const [zipInfo, setZipInfo] = useState<{
@@ -23,6 +30,7 @@ export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUpl
     hasChatFile: boolean;
     estimatedMediaFiles: number;
   } | null>(null);
+  const [extractedConversations, setExtractedConversations] = useState<Conversation[]>([]);
 
   const handleZipExtraction = async (zipFile: File) => {
     setIsExtracting(true);
@@ -51,7 +59,27 @@ export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUpl
       
       if (result.success) {
         setExtractionStatus(`✅ Extraídos: ${result.files.mediaFiles.length} archivos multimedia`);
-        onFilesUploaded(result.files);
+        
+        if (multipleMode && onConversationAdded) {
+          // Crear nueva conversación
+          const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const conversationName = zipFile.name.replace('.zip', '') || `Conversación ${new Date().toLocaleString()}`;
+          
+          const newConversation: Conversation = {
+            id: conversationId,
+            name: conversationName,
+            uploadedFiles: result.files,
+            processingState: { step: 'upload', progress: 0 },
+            processedMessages: [],
+            isProcessing: false,
+            createdAt: new Date()
+          };
+          
+          setExtractedConversations(prev => [...prev, newConversation]);
+          onConversationAdded(newConversation);
+        } else if (onFilesUploaded) {
+          onFilesUploaded(result.files);
+        }
       } else {
         setExtractionStatus(`❌ Error: ${result.error}`);
       }
@@ -64,33 +92,48 @@ export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUpl
   };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    // Buscar archivos ZIP primero
-    const zipFile = acceptedFiles.find(file => isValidZipFile(file));
-    
-    if (zipFile) {
-      console.log('ZIP file detected, extracting...');
-      await handleZipExtraction(zipFile);
-      return;
+    if (multipleMode) {
+      // En modo múltiple, procesar todos los archivos ZIP
+      const zipFiles = acceptedFiles.filter(file => isValidZipFile(file));
+      
+      if (zipFiles.length > 0) {
+        console.log(`Processing ${zipFiles.length} ZIP files...`);
+        for (const zipFile of zipFiles) {
+          await handleZipExtraction(zipFile);
+        }
+        return;
+      }
+    } else {
+      // Modo original: un solo archivo ZIP
+      const zipFile = acceptedFiles.find(file => isValidZipFile(file));
+      
+      if (zipFile) {
+        console.log('ZIP file detected, extracting...');
+        await handleZipExtraction(zipFile);
+        return;
+      }
     }
     
-    // Fallback al método original para archivos individuales
-    const chatFile = acceptedFiles.find(file => file.name.includes('_chat.txt'));
-    const mediaFiles = acceptedFiles.filter(file => 
-      !file.name.includes('_chat.txt') && 
-      (file.type.startsWith('image/') || 
-       file.type.startsWith('video/') || 
-       file.type.startsWith('audio/') ||
-       file.name.includes('.opus') ||
-       file.name.includes('.ogg'))
-    );
+    // Fallback al método original para archivos individuales (solo en modo single)
+    if (!multipleMode && onFilesUploaded) {
+      const chatFile = acceptedFiles.find(file => file.name.includes('_chat.txt'));
+      const mediaFiles = acceptedFiles.filter(file => 
+        !file.name.includes('_chat.txt') && 
+        (file.type.startsWith('image/') || 
+         file.type.startsWith('video/') || 
+         file.type.startsWith('audio/') ||
+         file.name.includes('.opus') ||
+         file.name.includes('.ogg'))
+      );
 
-    const newFiles: UploadedFiles = {
-      chatFile: chatFile || uploadedFiles.chatFile,
-      mediaFiles: [...uploadedFiles.mediaFiles, ...mediaFiles]
-    };
+      const newFiles: UploadedFiles = {
+        chatFile: chatFile || uploadedFiles.chatFile,
+        mediaFiles: [...uploadedFiles.mediaFiles, ...mediaFiles]
+      };
 
-    onFilesUploaded(newFiles);
-  }, [onFilesUploaded, uploadedFiles]);
+      onFilesUploaded(newFiles);
+    }
+  }, [onFilesUploaded, uploadedFiles, multipleMode, handleZipExtraction]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -107,11 +150,17 @@ export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUpl
   });
 
   const removeMediaFile = (index: number) => {
+    if (!onFilesUploaded) return;
+    
     const newMediaFiles = uploadedFiles.mediaFiles.filter((_, i) => i !== index);
     onFilesUploaded({
       ...uploadedFiles,
       mediaFiles: newMediaFiles
     });
+  };
+
+  const removeConversation = (conversationId: string) => {
+    setExtractedConversations(prev => prev.filter(conv => conv.id !== conversationId));
   };
 
   const getFileIcon = (file: File) => {
@@ -127,7 +176,7 @@ export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUpl
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />
-            Subir Archivo de WhatsApp
+            {multipleMode ? 'Subir Múltiples Conversaciones de WhatsApp' : 'Subir Archivo de WhatsApp'}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -161,16 +210,24 @@ export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUpl
                   <Upload className="w-12 h-12 text-gray-400" />
                 </div>
                 <p className="text-gray-600 font-medium mb-2">
-                  Arrastra el archivo ZIP de WhatsApp aquí
+                  {multipleMode 
+                    ? 'Arrastra uno o más archivos ZIP de WhatsApp aquí' 
+                    : 'Arrastra el archivo ZIP de WhatsApp aquí'
+                  }
                 </p>
                 <p className="text-sm text-gray-500 mb-3">
-                  O archivos individuales (_chat.txt + multimedia)
+                  {multipleMode 
+                    ? 'Puedes subir múltiples conversaciones a la vez'
+                    : 'O archivos individuales (_chat.txt + multimedia)'
+                  }
                 </p>
                 <div className="bg-blue-50 p-3 rounded-lg text-sm">
                   <p className="text-blue-700 font-medium mb-1">💡 Recomendado: Archivo ZIP</p>
                   <p className="text-blue-600">
-                    Exporta el chat desde WhatsApp con "Incluir archivos multimedia" 
-                    y sube directamente el archivo ZIP.
+                    {multipleMode 
+                      ? 'Exporta cada chat desde WhatsApp con "Incluir archivos multimedia" y sube todos los archivos ZIP juntos.'
+                      : 'Exporta el chat desde WhatsApp con "Incluir archivos multimedia" y sube directamente el archivo ZIP.'
+                    }
                   </p>
                 </div>
               </div>
@@ -199,8 +256,43 @@ export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUpl
         </CardContent>
       </Card>
 
-      {/* Chat File Preview */}
-      {uploadedFiles.chatFile && (
+      {/* Extracted Conversations Preview (Multiple Mode) */}
+      {multipleMode && extractedConversations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-green-600">
+              ✓ Conversaciones Cargadas ({extractedConversations.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {extractedConversations.map((conversation) => (
+                <div key={conversation.id} className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+                  <Archive className="w-4 h-4 text-green-600" />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium">{conversation.name}</span>
+                    <div className="text-xs text-gray-500">
+                      {conversation.uploadedFiles.mediaFiles.length} archivos multimedia • 
+                      Cargado: {conversation.createdAt.toLocaleTimeString()}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeConversation(conversation.id)}
+                    className="h-6 w-6 p-0 hover:bg-red-100"
+                  >
+                    <X className="w-3 h-3 text-red-500" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Chat File Preview (Single Mode) */}
+      {!multipleMode && uploadedFiles.chatFile && (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium text-green-600">
@@ -219,8 +311,8 @@ export default function FileUploader({ onFilesUploaded, uploadedFiles }: FileUpl
         </Card>
       )}
 
-      {/* Media Files Preview */}
-      {uploadedFiles.mediaFiles.length > 0 && (
+      {/* Media Files Preview (Single Mode) */}
+      {!multipleMode && uploadedFiles.mediaFiles.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">
