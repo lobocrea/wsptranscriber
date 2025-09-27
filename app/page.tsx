@@ -290,29 +290,32 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="container mx-auto px-3 md:px-4 py-4 md:py-8 max-w-6xl">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="p-3 bg-blue-600 text-white rounded-xl">
-              <MessageSquare className="w-8 h-8" />
+        <div className="text-center mb-6 md:mb-8">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 mb-4">
+            <div className="p-2 md:p-3 bg-blue-600 text-white rounded-xl">
+              <MessageSquare className="w-6 h-6 md:w-8 md:h-8" />
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            <h1 className="text-2xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
               WhatsApp Transcriber AI
             </h1>
           </div>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-6">
+          <p className="text-base md:text-xl text-gray-600 max-w-2xl mx-auto mb-4 md:mb-6 px-2">
             Convierte tus conversaciones de WhatsApp en texto transcrito completo usando 
             Gemini AI con soporte universal para todos los formatos de audio
           </p>
           
-          {/* Mode Toggle */}
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <div className="flex items-center gap-3 p-3 bg-white rounded-lg border shadow-sm">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-gray-600" />
-                <span className={`text-sm font-medium ${!multipleMode ? 'text-blue-600' : 'text-gray-500'}`}>
+          {/* Mode Toggle - Mobile Optimized */}
+          <div className="flex items-center justify-center mb-4">
+            <div className="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white rounded-lg border shadow-sm max-w-full overflow-hidden">
+              <div className="flex items-center gap-1 md:gap-2">
+                <MessageSquare className="w-3 h-3 md:w-4 md:h-4 text-gray-600 flex-shrink-0" />
+                <span className={`text-xs md:text-sm font-medium ${!multipleMode ? 'text-blue-600' : 'text-gray-500'} hidden sm:inline`}>
                   Una Conversación
+                </span>
+                <span className={`text-xs font-medium ${!multipleMode ? 'text-blue-600' : 'text-gray-500'} sm:hidden`}>
+                  Una
                 </span>
               </div>
               
@@ -320,19 +323,22 @@ export default function Home() {
                 variant="ghost"
                 size="sm"
                 onClick={toggleMode}
-                className="p-1 h-8 w-12"
+                className="p-1 h-6 w-8 md:h-8 md:w-12"
               >
                 {multipleMode ? (
-                  <ToggleRight className="w-6 h-6 text-blue-600" />
+                  <ToggleRight className="w-4 h-4 md:w-6 md:h-6 text-blue-600" />
                 ) : (
-                  <ToggleLeft className="w-6 h-6 text-gray-400" />
+                  <ToggleLeft className="w-4 h-4 md:w-6 md:h-6 text-gray-400" />
                 )}
               </Button>
               
-              <div className="flex items-center gap-2">
-                <Archive className="w-4 h-4 text-gray-600" />
-                <span className={`text-sm font-medium ${multipleMode ? 'text-blue-600' : 'text-gray-500'}`}>
+              <div className="flex items-center gap-1 md:gap-2">
+                <Archive className="w-3 h-3 md:w-4 md:h-4 text-gray-600 flex-shrink-0" />
+                <span className={`text-xs md:text-sm font-medium ${multipleMode ? 'text-blue-600' : 'text-gray-500'} hidden sm:inline`}>
                   Múltiples Conversaciones
+                </span>
+                <span className={`text-xs font-medium ${multipleMode ? 'text-blue-600' : 'text-gray-500'} sm:hidden`}>
+                  Múltiples
                 </span>
               </div>
             </div>
@@ -347,45 +353,45 @@ export default function Home() {
         </div>
 
         {/* Features */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
           <Card className="text-center">
-            <CardContent className="p-6">
-              <Zap className="w-10 h-10 text-yellow-500 mx-auto mb-3" />
-              <h3 className="font-semibold mb-2">Transcripción Automática</h3>
-              <p className="text-sm text-gray-600">
+            <CardContent className="p-4 md:p-6">
+              <Zap className="w-8 h-8 md:w-10 md:h-10 text-yellow-500 mx-auto mb-2 md:mb-3" />
+              <h3 className="font-semibold mb-1 md:mb-2 text-sm md:text-base">Transcripción Automática</h3>
+              <p className="text-xs md:text-sm text-gray-600">
                 Transcripción con Gemini AI para TODOS los formatos de audio
               </p>
             </CardContent>
           </Card>
           
           <Card className="text-center">
-            <CardContent className="p-6">
-              <Brain className="w-10 h-10 text-purple-500 mx-auto mb-3" />
-              <h3 className="font-semibold mb-2">Organización IA</h3>
-              <p className="text-sm text-gray-600">
+            <CardContent className="p-4 md:p-6">
+              <Brain className="w-8 h-8 md:w-10 md:h-10 text-purple-500 mx-auto mb-2 md:mb-3" />
+              <h3 className="font-semibold mb-1 md:mb-2 text-sm md:text-base">Organización IA</h3>
+              <p className="text-xs md:text-sm text-gray-600">
                 Gemini AI organiza cronológicamente toda la conversación
               </p>
             </CardContent>
           </Card>
           
           <Card className="text-center">
-            <CardContent className="p-6">
-              <FileText className="w-10 h-10 text-green-500 mx-auto mb-3" />
-              <h3 className="font-semibold mb-2">Exportación Completa</h3>
-              <p className="text-sm text-gray-600">
+            <CardContent className="p-4 md:p-6">
+              <FileText className="w-8 h-8 md:w-10 md:h-10 text-green-500 mx-auto mb-2 md:mb-3" />
+              <h3 className="font-semibold mb-1 md:mb-2 text-sm md:text-base">Exportación Completa</h3>
+              <p className="text-xs md:text-sm text-gray-600">
                 Descarga la transcripción completa en formato texto
               </p>
             </CardContent>
           </Card>
         </div>
 
-        <Separator className="my-8" />
+        <Separator className="my-6 md:my-8" />
 
         {showMultipleManager ? (
           /* Multiple Conversations Mode */
-          <div className="space-y-8">
+          <div className="space-y-6 md:space-y-8">
             <div>
-              <h2 className="text-2xl font-bold mb-4">Cargar Múltiples Conversaciones</h2>
+              <h2 className="text-xl md:text-2xl font-bold mb-4">Cargar Múltiples Conversaciones</h2>
               <FileUploader 
                 multipleMode={true}
                 onConversationAdded={handleConversationAdded}
@@ -400,10 +406,10 @@ export default function Home() {
           </div>
         ) : !showResults ? (
           /* Single Conversation Mode - Upload */
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
             {/* File Upload Section */}
             <div>
-              <h2 className="text-2xl font-bold mb-4">Paso 1: Cargar Archivos</h2>
+              <h2 className="text-xl md:text-2xl font-bold mb-4">Paso 1: Cargar Archivos</h2>
               <FileUploader 
                 onFilesUploaded={setUploadedFiles}
                 uploadedFiles={uploadedFiles}
@@ -442,15 +448,15 @@ export default function Home() {
 
             {/* Processing Section */}
             <div>
-              <h2 className="text-2xl font-bold mb-4">Progreso del Procesamiento</h2>
+              <h2 className="text-xl md:text-2xl font-bold mb-4">Progreso del Procesamiento</h2>
               <ProcessingSteps state={processingState} />
             </div>
           </div>
         ) : (
           /* Results Section */
           <div>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">Conversación Transcrita</h2>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+              <h2 className="text-xl md:text-2xl font-bold">Conversación Transcrita</h2>
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -458,6 +464,7 @@ export default function Home() {
                   setProcessingState({ step: 'upload', progress: 0 });
                   setUploadedFiles({ chatFile: null, mediaFiles: [] });
                 }}
+                className="w-full sm:w-auto"
               >
                 Nuevo Análisis
               </Button>

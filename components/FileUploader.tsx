@@ -182,7 +182,7 @@ export default function FileUploader({
         <CardContent>
           <div
             {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+            className={`border-2 border-dashed rounded-lg p-4 md:p-8 text-center cursor-pointer transition-colors ${
               isDragActive 
                 ? 'border-blue-500 bg-blue-50' 
                 : isExtracting
@@ -194,36 +194,36 @@ export default function FileUploader({
             
             {isExtracting ? (
               <div className="flex flex-col items-center">
-                <Loader2 className="w-12 h-12 mx-auto mb-4 text-orange-500 animate-spin" />
-                <p className="text-orange-600 font-medium mb-2">Procesando archivo ZIP...</p>
-                <p className="text-sm text-orange-500">{extractionStatus}</p>
+                <Loader2 className="w-8 h-8 md:w-12 md:h-12 mx-auto mb-3 md:mb-4 text-orange-500 animate-spin" />
+                <p className="text-orange-600 font-medium mb-2 text-sm md:text-base">Procesando archivo ZIP...</p>
+                <p className="text-xs md:text-sm text-orange-500 px-2">{extractionStatus}</p>
               </div>
             ) : isDragActive ? (
               <div className="flex flex-col items-center">
-                <Upload className="w-12 h-12 mx-auto mb-4 text-blue-500" />
-                <p className="text-blue-600 font-medium">Suelta el archivo aquí...</p>
+                <Upload className="w-8 h-8 md:w-12 md:h-12 mx-auto mb-3 md:mb-4 text-blue-500" />
+                <p className="text-blue-600 font-medium text-sm md:text-base">Suelta el archivo aquí...</p>
               </div>
             ) : (
               <div className="flex flex-col items-center">
-                <div className="flex gap-4 mb-4">
-                  <Archive className="w-12 h-12 text-blue-500" />
-                  <Upload className="w-12 h-12 text-gray-400" />
+                <div className="flex gap-2 md:gap-4 mb-3 md:mb-4">
+                  <Archive className="w-8 h-8 md:w-12 md:h-12 text-blue-500" />
+                  <Upload className="w-8 h-8 md:w-12 md:h-12 text-gray-400" />
                 </div>
-                <p className="text-gray-600 font-medium mb-2">
+                <p className="text-gray-600 font-medium mb-2 text-sm md:text-base px-2">
                   {multipleMode 
                     ? 'Arrastra uno o más archivos ZIP de WhatsApp aquí' 
                     : 'Arrastra el archivo ZIP de WhatsApp aquí'
                   }
                 </p>
-                <p className="text-sm text-gray-500 mb-3">
+                <p className="text-xs md:text-sm text-gray-500 mb-3 px-2">
                   {multipleMode 
                     ? 'Puedes subir múltiples conversaciones a la vez'
                     : 'O archivos individuales (_chat.txt + multimedia)'
                   }
                 </p>
-                <div className="bg-blue-50 p-3 rounded-lg text-sm">
+                <div className="bg-blue-50 p-2 md:p-3 rounded-lg text-xs md:text-sm mx-2 md:mx-0">
                   <p className="text-blue-700 font-medium mb-1">💡 Recomendado: Archivo ZIP</p>
-                  <p className="text-blue-600">
+                  <p className="text-blue-600 text-left">
                     {multipleMode 
                       ? 'Exporta cada chat desde WhatsApp con "Incluir archivos multimedia" y sube todos los archivos ZIP juntos.'
                       : 'Exporta el chat desde WhatsApp con "Incluir archivos multimedia" y sube directamente el archivo ZIP.'

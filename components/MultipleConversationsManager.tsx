@@ -18,7 +18,9 @@ import {
   FileText,
   CheckCircle,
   AlertCircle,
-  Loader2
+  Loader2,
+  PlayCircle,
+  Zap
 } from 'lucide-react';
 import { Conversation, ChatMessage } from '@/types/chat';
 import { parseChatFile, extractMediaFiles } from '@/lib/chat-parser';
@@ -38,6 +40,7 @@ export default function MultipleConversationsManager({
 }: MultipleConversationsManagerProps) {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [viewingConversationId, setViewingConversationId] = useState<string | null>(null);
+  const [isProcessingAll, setIsProcessingAll] = useState(false);
 
   const processConversation = async (conversationId: string) => {
     const conversation = conversations.find(c => c.id === conversationId);
@@ -199,6 +202,33 @@ export default function MultipleConversationsManager({
     }
   };
 
+  const processAllConversations = async () => {
+    const pendingConversations = conversations.filter(
+      c => !c.isProcessing && c.processingState.step !== 'complete'
+    );
+
+    if (pendingConversations.length === 0) {
+      return;
+    }
+
+    setIsProcessingAll(true);
+    console.log(`=== INICIANDO PROCESAMIENTO DE ${pendingConversations.length} CONVERSACIONES ===`);
+
+    // Procesar conversaciones secuencialmente para evitar sobrecarga
+    for (const conversation of pendingConversations) {
+      if (!conversation.isProcessing && conversation.processingState.step !== 'complete') {
+        setActiveConversationId(conversation.id);
+        await processConversation(conversation.id);
+        // Pequeña pausa entre procesamientos para evitar sobrecarga
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    setIsProcessingAll(false);
+    setActiveConversationId(null);
+    console.log('=== PROCESAMIENTO MASIVO COMPLETADO ===');
+  };
+
   const getStatusBadge = (conversation: Conversation) => {
     if (conversation.isProcessing) {
       return <Badge variant="secondary" className="bg-orange-100 text-orange-800">
@@ -246,15 +276,58 @@ export default function MultipleConversationsManager({
     );
   }
 
+  const pendingCount = conversations.filter(c => !c.isProcessing && c.processingState.step !== 'complete').length;
+  const processingCount = conversations.filter(c => c.isProcessing).length;
+  const completedCount = conversations.filter(c => c.processingState.step === 'complete' && !c.processingState.error).length;
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Gestión de Conversaciones ({conversations.length})</h2>
-        {conversations.some(c => c.isProcessing) && (
-          <Badge variant="secondary" className="bg-orange-100 text-orange-800">
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            {conversations.filter(c => c.isProcessing).length} procesando
-          </Badge>
+    <div className="space-y-4 md:space-y-6">
+      {/* Header - Responsive */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h2 className="text-xl md:text-2xl font-bold">Conversaciones ({conversations.length})</h2>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {pendingCount > 0 && (
+              <Badge variant="outline" className="text-xs">
+                <Clock className="w-3 h-3 mr-1" />
+                {pendingCount} pendientes
+              </Badge>
+            )}
+            {processingCount > 0 && (
+              <Badge variant="secondary" className="bg-orange-100 text-orange-800 text-xs">
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                {processingCount} procesando
+              </Badge>
+            )}
+            {completedCount > 0 && (
+              <Badge variant="default" className="bg-green-100 text-green-800 text-xs">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                {completedCount} completadas
+              </Badge>
+            )}
+          </div>
+        </div>
+        
+        {/* Process All Button */}
+        {pendingCount > 0 && (
+          <Button
+            onClick={processAllConversations}
+            disabled={isProcessingAll || processingCount > 0}
+            size="sm"
+            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+          >
+            {isProcessingAll ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Procesando Todas...
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4 mr-2" />
+                Transcribir Todas ({pendingCount})
+              </>
+            )}
+          </Button>
         )}
       </div>
 
@@ -269,40 +342,41 @@ export default function MultipleConversationsManager({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
+        <div className="space-y-3 md:space-y-4">
           {conversations.map((conversation) => (
             <Card key={conversation.id} className="relative">
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5" />
-                      {conversation.name}
+              <CardHeader className="pb-3 px-4 md:px-6">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-base md:text-lg flex items-center gap-2 truncate">
+                      <MessageSquare className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0" />
+                      <span className="truncate">{conversation.name}</span>
                     </CardTitle>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                    <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-2 text-xs md:text-sm text-gray-500">
                       <span className="flex items-center gap-1">
-                        <FileText className="w-4 h-4" />
+                        <FileText className="w-3 h-3 md:w-4 md:h-4" />
                         {conversation.uploadedFiles.mediaFiles.length} archivos
                       </span>
                       <span className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        {conversation.createdAt.toLocaleString()}
+                        <Clock className="w-3 h-3 md:w-4 md:h-4" />
+                        <span className="hidden sm:inline">{conversation.createdAt.toLocaleString()}</span>
+                        <span className="sm:hidden">{conversation.createdAt.toLocaleDateString()}</span>
                       </span>
                       {conversation.processedMessages.length > 0 && (
                         <span className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
+                          <Users className="w-3 h-3 md:w-4 md:h-4" />
                           {conversation.processedMessages.length} mensajes
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {getStatusBadge(conversation)}
                   </div>
                 </div>
               </CardHeader>
               
-              <CardContent className="pt-0">
+              <CardContent className="pt-0 px-4 md:px-6">
                 {/* Processing Steps */}
                 {(conversation.isProcessing || activeConversationId === conversation.id) && (
                   <div className="mb-4">
@@ -320,8 +394,8 @@ export default function MultipleConversationsManager({
                   </Alert>
                 )}
 
-                {/* Action Buttons */}
-                <div className="flex gap-2">
+                {/* Action Buttons - Mobile Optimized */}
+                <div className="flex flex-col sm:flex-row gap-2">
                   {!conversation.isProcessing && conversation.processingState.step !== 'complete' && (
                     <Button
                       onClick={() => {
@@ -344,7 +418,8 @@ export default function MultipleConversationsManager({
                       className="flex-1"
                     >
                       <Eye className="w-4 h-4 mr-2" />
-                      Ver Transcripción
+                      <span className="hidden sm:inline">Ver Transcripción</span>
+                      <span className="sm:hidden">Ver</span>
                     </Button>
                   )}
                   
@@ -352,9 +427,10 @@ export default function MultipleConversationsManager({
                     variant="outline"
                     onClick={() => onRemoveConversation(conversation.id)}
                     size="sm"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 sm:w-auto"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-4 h-4 sm:mr-0" />
+                    <span className="ml-2 sm:hidden">Eliminar</span>
                   </Button>
                 </div>
               </CardContent>
