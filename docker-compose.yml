@@ -6,16 +6,12 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: wsptranscriber-app
-    # Solo exponer puerto interno para Caddy (no público)
-    expose:
-      - "3000"
-    # Para acceso directo sin Caddy, descomenta la siguiente línea:
-    # ports:
-    #   - "80:3000"
+    # Exponer en puerto 3003 para Caddy
+    ports:
+      - "3003:3000"
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
-      # Variables para proxy reverso
       - HOSTNAME=0.0.0.0
       - PORT=3000
     env_file:
@@ -27,32 +23,13 @@ services:
       - logs:/app/logs
     restart: unless-stopped
     networks:
-      - caddy-network
+      - wsptranscriber-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-
-  # Caddy como proxy reverso
-  caddy:
-    image: caddy:2-alpine
-    container_name: wsptranscriber-caddy
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    environment:
-      - CADDY_INGRESS_NETWORKS=caddy-network
-    networks:
-      - caddy-network
-    restart: unless-stopped
-    depends_on:
-      - wsptranscriber
 
   # Servicio de desarrollo (comentado por defecto)
   # wsptranscriber-dev:
@@ -79,12 +56,7 @@ volumes:
     driver: local
   logs:
     driver: local
-  caddy_data:
-    driver: local
-  caddy_config:
-    driver: local
 
 networks:
-  caddy-network:
+  wsptranscriber-network:
     driver: bridge
-    name: caddy-network
