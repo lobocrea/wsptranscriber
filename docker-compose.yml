@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Aplicación principal WSP Transcriber
+  wsptranscriber:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wsptranscriber-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+    env_file:
+      - .env.local
+    volumes:
+      # Volumen para archivos temporales de uploads
+      - uploads:/app/uploads
+      # Volumen para logs (opcional)
+      - logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - wsptranscriber-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Servicio de desarrollo (comentado por defecto)
+  # wsptranscriber-dev:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.dev
+  #   container_name: wsptranscriber-dev
+  #   ports:
+  #     - "3001:3000"
+  #   environment:
+  #     - NODE_ENV=development
+  #   env_file:
+  #     - .env.local
+  #   volumes:
+  #     - .:/app
+  #     - /app/node_modules
+  #     - /app/.next
+  #   command: npm run dev
+  #   networks:
+  #     - wsptranscriber-network
+
+volumes:
+  uploads:
+    driver: local
+  logs:
+    driver: local
+
+networks:
+  wsptranscriber-network:
+    driver: bridge

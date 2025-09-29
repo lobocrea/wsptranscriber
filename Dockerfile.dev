@@ -1,0 +1,26 @@
+# Dockerfile para desarrollo - WSP Transcriber
+FROM node:18-alpine
+
+# Instalar dependencias del sistema
+RUN apk add --no-cache libc6-compat
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Copiar archivos de dependencias
+COPY package.json package-lock.json* ./
+
+# Instalar dependencias (incluyendo devDependencies)
+RUN npm ci
+
+# Copiar código fuente
+COPY . .
+
+# Crear archivo .env.local si no existe
+RUN touch .env.local
+
+# Exponer puerto 3000
+EXPOSE 3000
+
+# Comando para desarrollo con hot reload
+CMD ["npm", "run", "dev"]
